@@ -1,0 +1,33 @@
+package testt;
+
+import java.util.Scanner;
+
+public class Human{
+	     String name;
+		double height;
+		String occupation;
+
+		public Human(String n, String o,double h) {
+			name=n;
+			occupation=o;
+			height=h;
+			System.out.println(name+" "+occupation+" "+height);
+		}
+	public void Attributes() {
+		  Scanner input=new Scanner(System.in);
+		  name=input.next();
+		  occupation=input.next();
+		  height=input.nextDouble();
+		  System.out.println(name+" "+occupation+" "+height);
+}
+	
+}
+public class Main{
+	public static void main(String[]args){
+	Human h=new Human("xxx","sjh",6.3);
+	
+	//System.out.println(name +" "+occupation+" "+height);
+	//h.Attributes();
+
+	}
+	}
