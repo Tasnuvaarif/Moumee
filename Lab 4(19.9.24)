@@ -1,0 +1,31 @@
+
+public class geometry {
+	double ar;
+      void area(int a) {
+    	  ar=a*a;
+    	  System.out.println("Area of square="+ ar);
+      }
+      void area(double a,double b) {
+    	  ar=a*b;
+    	  System.out.println("Area of rectangle="+ ar);
+      }
+      void area(double a) {
+    	  ar=3.1416*a;
+    	  System.out.println("Area of circle="+ ar);
+      }
+      void area(int a,int b) {
+    	  ar=.5*a*b;
+    	  System.out.println("Area of tringle="+ ar);
+      }
+}
+
+
+public class Main{
+	public static void main(String[]args) {
+		geometry g=new geometry();
+		g.area(8.3);
+		g.area(8,3);
+		g.area(8);
+		g.area(8.394598455,3.6487384);
+	}
+}
