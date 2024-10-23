@@ -1,0 +1,44 @@
+import java.util.Scanner;
+
+class Banking {
+    
+    void transfer(double amt) {
+        System.out.println("Domestic transfer of amount: $" + amt);
+    }
+    
+    void transfer(double amt, String dest) {
+        double baseFee = 0.05 * amt;
+        double totalFee;
+
+        if (dest.equalsIgnoreCase("usa")) {
+            totalFee = baseFee + (0.07 * amt);
+        } else if (dest.equalsIgnoreCase("canada")) {
+            totalFee = baseFee + (0.10 * amt);
+        } else if (dest.equalsIgnoreCase("australia")) {
+            totalFee = baseFee + (0.15 * amt);
+        } else {
+            totalFee = baseFee;
+        }
+
+        double totalAmt = amt + totalFee;
+        System.out.println("International transfer to " + dest + ": $" + totalAmt);
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        Banking bank = new Banking();
+        
+        System.out.print("Enter amount for domestic transfer: ");
+        double domesticAmt = scanner.nextDouble();
+        bank.transfer(domesticAmt);
+        
+        System.out.print("Enter amount for international transfer: ");
+        double internationalAmt = scanner.nextDouble();
+        System.out.print("Enter destination for international transfer: ");
+        String destination = scanner.next();
+        bank.transfer(internationalAmt, destination);
+  
+    }
+}
