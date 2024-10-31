@@ -1,0 +1,72 @@
+abstract class GradingSystem {
+    private String name;
+    private String semester;
+ 
+    protected GradingSystem(String name, String semester) {
+        this.name = name;
+        this.semester = semester;
+    }
+ 
+    public void setName(String name) {
+        this.name = name;
+    }
+ 
+    public void setSemester(String semester) {
+        this.semester = semester;
+    }
+ 
+    public String getName() {
+        return this.name;
+    }
+ 
+    public String getSemester() {
+        return this.semester;
+    }
+ 
+    abstract double calculateGrade(double score);
+ 
+    public char obtainedGrade(double score) {
+        double number = calculateGrade(score);
+        if (number >= 80)
+            return 'A';
+        else
+            return 'B';
+    }
+}
+ 
+class ExamGrade extends GradingSystem {
+     double score;
+ 
+    public ExamGrade(double score) {
+        this.score = score;
+    }
+ 
+    double calculateGrade(double score) {
+        return score * 2;
+    }
+}
+ 
+class ExtraCurricularGrade extends GradingSystem {
+    double score;
+    int attendance;
+ 
+    public ExtraCurricularGrade(double score, int attendance) {
+        this.score = score;
+        this.attendance = attendance;
+    }
+ 
+
+    double calculateGrade(double score) {
+        return (score + attendance) * 2;
+    }
+}
+ 
+public class Main {
+    public static void main(String[] args) {
+        ExamGrade examGrade = new ExamGrade(43);
+        ExtraCurricularGrade extraCurricularGrade = new ExtraCurricularGrade(37, 9);
+        double a= examGrade.calculategrade(43);
+        System.out.println("Exam grade of Student A: " + examGrade.obtainedGrade(a));
+        System.out.println("Extracurricular grade of Student B: " + extraCurricularGrade.obtainedGrade());
+    }
+}
