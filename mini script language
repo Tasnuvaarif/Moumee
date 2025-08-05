@@ -1,0 +1,59 @@
+%{
+#include<stdio.h>
+#include<string.h>
+#include<stdlib.h>
+int yylex(void);
+void yyerror(const char *s);
+%}
+%union
+{
+int num;
+char *str;
+}
+
+%token PRINT ADD
+%token <str> STRING
+%token <num> NUMBER
+
+%%
+start:
+|start input
+;
+input:
+STRING PRINT ';' {printf("output: %s\n",$1);}
+|NUMBER NUMBER ADD ';' {printf("sum:%d\n",$1+$2);}
+;
+%%
+
+void yyerror(const char *s)
+{printf("syntax error: %s\n",s);}
+
+int main()
+{yyparse();
+return 0;}
+
+%{
+#include "mini.tab.h"
+#include<stdio.h>
+#include<string.h>
+#include<stdlib.h>
+%}
+
+%%
+print {return PRINT;}
+add {return ADD;}
+\"[^\"]+\" {yylval.str=strdup(yytext); return STRING;}
+[0-9]+ {yylval.num=atoi(yytext); return NUMBER;}
+[ \n\t] ;
+. {return yytext[0];}
+%%
+
+int yywrap(){
+return 1;}
+
+output:
+bison -d filename
+flex filename
+gcc -o app file.tab.c lex.yy.c -mconsole
+app.exe
+
