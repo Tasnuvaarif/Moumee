@@ -1,0 +1,33 @@
+##!/bin/bash
+read -p"input marks: " marks
+
+if [ $marks -ge 80 ]
+then
+echo "A+"
+elif [ $marks -lt 80 ] && [ $marks -ge 75 ]
+then
+echo "A"
+elif [ $marks -lt 75 ] && [ $marks -ge 70 ]
+then
+echo "A-"
+elif [ $marks -lt 70 ] && [ $marks -ge 65 ]
+then
+echo "B+"
+elif [ $marks -lt 65 ] && [ $marks -ge 60 ]
+then
+echo "B"
+elif [ $marks -lt 60 ] && [ $marks -ge 55 ]
+then
+echo "B-"
+elif [ $marks -lt 55 ] && [ $marks -ge 50 ]
+then
+echo "C+"
+elif [ $marks -lt 50 ] && [ $marks -ge 45 ]
+then
+echo "C"
+elif [ $marks -lt 45 ] && [ $marks -ge 40 ]
+then
+echo "D"
+else
+echo "F"
+fi
