@@ -1,0 +1,234 @@
+from flask import Flask, render_template_string
+import subprocess
+from datetime import datetime
+import time
+from urllib.parse import urlparse # URL ক্লিন করার লাইব্রেরি
+
+app = Flask(__name__)
+
+start_time = time.time()
+
+def get_uptime():
+    seconds = int(time.time() - start_time)
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    return f"{h}h {m}m {s}s"
+
+# --- URL থেকে শুধু নাম বের করার ফাংশন ---
+def get_clean_domain(url):
+    try:
+        # যদি URL 'http' দিয়ে শুরু হয়
+        if url.startswith('http'):
+            parsed = urlparse(url)
+            domain = parsed.netloc
+            # পোর্ট নম্বর থাকলে ফেলে দাও (যেমন :443)
+            return domain.split(':')[0]
+        # যদি সরাসরি ডোমেইন হয় (CONNECT request)
+        else:
+            return url.split(':')[0]
+    except:
+        return url
+
+# --- Log Analysis ---
+def analyze_logs():
+    log_file = "/var/log/squid/access.log"
+    
+    total = 0
+    blocked = 0
+    cached = 0
+    normal = 0
+    
+    blocked_list = []
+    cached_list = []
+
+    try:
+        with open(log_file, "r") as file:
+            lines = file.readlines()
+            total = len(lines)
+            
+            for line in reversed(lines):
+                try:
+                    parts = line.split()
+                    if len(parts) < 7: continue
+
+                    timestamp = float(parts[0])
+                    time_str = datetime.fromtimestamp(timestamp).strftime('%H:%M:%S')
+                    client_ip = parts[2]
+                    raw_url = parts[6]
+
+                    # URL ক্লিন করা হচ্ছে
+                    if raw_url == '-': 
+                        clean_url = "Direct/Hidden"
+                    else:
+                        clean_url = get_clean_domain(raw_url)
+
+                    # ব্লকিং চেক
+                    if "TCP_DENIED" in line:
+                        blocked += 1
+                        if len(blocked_list) < 10:
+                            blocked_list.append({
+                                'time': time_str,
+                                'ip': client_ip,
+                                'url': clean_url # ক্লিন নাম যাবে
+                            })
+
+                    # ক্যাশিং চেক
+                    elif "TCP_HIT" in line or "TCP_MEM_HIT" in line:
+                        cached += 1
+                        if len(cached_list) < 10:
+                            cached_list.append({
+                                'time': time_str,
+                                'ip': client_ip,
+                                'url': clean_url # ক্লিন নাম যাবে
+                            })
+                    
+                    else:
+                        normal += 1
+                        
+                except:
+                    continue
+        
+        normal = total - blocked - cached
+        if normal < 0: normal = 0
+
+    except Exception as e:
+        return 0, 0, 0, 0, [], [], "Offline"
+
+    return total, blocked, cached, normal, blocked_list, cached_list
+
+# --- HTML & CSS ---
+html_code = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Squid Smart Monitor</title>
+    <meta http-equiv="refresh" content="5">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #111827; --card: #1f2937; --text: #f3f4f6;
+            --blue: #3b82f6; --red: #ef4444; --green: #10b981;
+        }
+        body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        
+        /* Header */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 1px solid #374151; padding-bottom: 20px; }
+        h1 { font-family: 'Rajdhani', sans-serif; font-size: 2rem; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
+        .uptime { background: rgba(59, 130, 246, 0.1); color: var(--blue); padding: 5px 12px; border-radius: 6px; font-weight: bold; border: 1px solid rgba(59, 130, 246, 0.2); }
+
+        /* Stats */
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
+        .card { background: var(--card); padding: 20px; border-radius: 12px; text-align: center; border: 1px solid #374151; }
+        .card h2 { font-size: 2.5rem; margin: 10px 0; font-family: 'Rajdhani', sans-serif; }
+        .card p { color: #9ca3af; font-size: 0.85rem; text-transform: uppercase; margin: 0; }
+
+        /* Main Content */
+        .content-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+        
+        /* Tables */
+        .tables-wrapper { display: flex; flex-direction: column; gap: 20px; }
+        .table-card { background: var(--card); border-radius: 12px; overflow: hidden; border: 1px solid #374151; }
+        .table-title { padding: 15px 20px; font-weight: bold; font-family: 'Rajdhani', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 10px; }
+        
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th { text-align: left; padding: 12px 20px; background: rgba(0,0,0,0.2); color: #9ca3af; }
+        td { padding: 12px 20px; border-bottom: 1px solid #374151; }
+        .site-name { font-weight: bold; letter-spacing: 0.5px; }
+
+        /* Chart */
+        .chart-wrapper { background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #374151; height: fit-content; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ Squid Proxy Monitor</h1>
+            <div class="uptime">Live: {{ uptime }}</div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="card"><h2>{{ total }}</h2><p>Total Hits</p></div>
+            <div class="card"><h2 style="color: var(--red)">{{ blocked }}</h2><p>Blocked</p></div>
+            <div class="card"><h2 style="color: var(--green)">{{ cached }}</h2><p>Cached</p></div>
+            <div class="card"><h2 style="color: var(--blue)">{{ normal }}</h2><p>Normal</p></div>
+        </div>
+
+        <div class="content-grid">
+            <div class="tables-wrapper">
+                <!-- Blocked Table -->
+                <div class="table-card" style="border-left: 4px solid var(--red)">
+                    <div class="table-title" style="color: var(--red)">⛔ RECENTLY BLOCKED SITES</div>
+                    <table>
+                        <thead><tr><th>Time</th><th>IP Address</th><th>Website Name</th></tr></thead>
+                        <tbody>
+                            {% for item in blocked_list %}
+                            <tr>
+                                <td style="color: #9ca3af">{{ item.time }}</td>
+                                <td>{{ item.ip }}</td>
+                                <td class="site-name" style="color: var(--red)">{{ item.url }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Cached Table -->
+                <div class="table-card" style="border-left: 4px solid var(--green)">
+                    <div class="table-title" style="color: var(--green)">⚡ RECENTLY CACHED SITES</div>
+                    <table>
+                        <thead><tr><th>Time</th><th>IP Address</th><th>Website Name</th></tr></thead>
+                        <tbody>
+                            {% for item in cached_list %}
+                            <tr>
+                                <td style="color: #9ca3af">{{ item.time }}</td>
+                                <td>{{ item.ip }}</td>
+                                <td class="site-name" style="color: var(--green)">{{ item.url }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="chart-wrapper">
+                <h3 style="margin-top:0; color:#9ca3af; text-align:center;">TRAFFIC OVERVIEW</h3>
+                <canvas id="trafficChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        new Chart(document.getElementById('trafficChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Normal', 'Blocked', 'Cached'],
+                datasets: [{
+                    data: [{{ normal }}, {{ blocked }}, {{ cached }}],
+                    backgroundColor: ['#3b82f6', '#ef4444', '#10b981'],
+                    borderWidth: 0
+                }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#f3f4f6' } } } }
+        });
+    </script>
+</body>
+</html>
+"""
+
+@app.route('/')
+def home():
+    total, blocked, cached, normal, blocked_list, cached_list = analyze_logs()
+    return render_template_string(html_code, 
+                                  total=total, 
+                                  blocked=blocked, 
+                                  cached=cached, 
+                                  normal=normal,
+                                  blocked_list=blocked_list, 
+                                  cached_list=cached_list,
+                                  uptime=get_uptime())
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
