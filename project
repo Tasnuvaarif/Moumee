@@ -1,0 +1,545 @@
+#include <GL/glut.h>
+#include <bits/stdc++.h>
+
+using namespace std;
+
+bool isDay = true;
+float cloudOffset = 0.0f;
+float windmillAngle = 0.0f;
+
+
+float busOffset = 0.0f;
+float carOffset = 0.0f;
+float boatOffset = 0.0f;
+
+float busSpeed = 2.0f;
+float carSpeed = 3.0f;
+
+float wheelAngleBus = 0.0f;
+float wheelAngleCar = 0.0f;
+
+
+int trafficState = 0;
+int lightTimer = 0;
+
+
+void drawLineDDA(float x1, float y1, float x2, float y2) {
+    float dx = x2 - x1;
+    float dy = y2 - y1;
+    float steps = max(abs(dx), abs(dy));
+    float xInc = dx / steps;
+    float yInc = dy / steps;
+    float x = x1, y = y1;
+
+    glBegin(GL_POINTS);
+    for (int i = 0; i <= steps; i++) {
+        glVertex2f(x, y);
+        x += xInc;
+        y += yInc;
+    }
+    glEnd();
+}
+
+void plotCirclePoints(int cx, int cy, int x, int y) {
+    glBegin(GL_POINTS);
+    glVertex2i(cx + x, cy + y); glVertex2i(cx - x, cy + y);
+    glVertex2i(cx + x, cy - y); glVertex2i(cx - x, cy - y);
+    glVertex2i(cx + y, cy + x); glVertex2i(cx - y, cy + x);
+    glVertex2i(cx + y, cy - x); glVertex2i(cx - y, cy - x);
+    glEnd();
+}
+
+void drawCircleMidpoint(int cx, int cy, int r) {
+    int x = 0;
+    int y = r;
+    int p = 1 - r;
+    plotCirclePoints(cx, cy, x, y);
+    while (x < y) {
+        x++;
+        if (p < 0) {
+            p += 2 * x + 1;
+        } else {
+            y--;
+            p += 2 * (x - y) + 1;
+        }
+        plotCirclePoints(cx, cy, x, y);
+    }
+}
+
+
+void drawRect(float x, float y, float w, float h, float r, float g, float b) {
+    glColor3f(r, g, b);
+    glBegin(GL_QUADS);
+    glVertex2f(x, y); glVertex2f(x + w, y);
+    glVertex2f(x + w, y + h); glVertex2f(x, y + h);
+    glEnd();
+}
+
+void drawFilledCircle(float cx, float cy, float radius, float r, float g, float b) {
+    glColor3f(r, g, b);
+    glBegin(GL_POLYGON);
+    for (int i = 0; i < 360; i += 10) {
+        float theta = i * 3.14159f / 180.0f;
+        glVertex2f(cx + radius * cos(theta), cy + radius * sin(theta));
+    }
+    glEnd();
+}
+
+void drawText(string text, float x, float y) {
+    glColor3f(0, 0, 0);
+    glRasterPos2f(x, y);
+    for (char c : text) {
+        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, c);
+    }
+}
+
+void drawWheel(float cx, float cy, float radius, float angle) {
+    drawFilledCircle(cx, cy, radius, 0.1f, 0.1f, 0.1f);
+    drawFilledCircle(cx, cy, radius * 0.6f, 0.8f, 0.8f, 0.8f);
+
+    glPushMatrix();
+    glTranslatef(cx, cy, 0);
+    glRotatef(angle, 0, 0, 1);
+
+    glColor3f(0.2f, 0.2f, 0.2f);
+    glBegin(GL_LINES);
+    glVertex2f(-radius * 0.6f, 0); glVertex2f(radius * 0.6f, 0);
+    glVertex2f(0, -radius * 0.6f); glVertex2f(0, radius * 0.6f);
+    glEnd();
+
+    glPopMatrix();
+}
+
+void drawPerson(float x, float y, float bodyR, float bodyG, float bodyB, bool isFemale) {
+    drawFilledCircle(x, y + 30, 8, 0, 0, 0);
+
+    glColor3f(bodyR, bodyG, bodyB);
+    glBegin(GL_TRIANGLES);
+    if (isFemale) {
+        glVertex2f(x, y + 25); glVertex2f(x - 15, y - 10); glVertex2f(x + 15, y - 10);
+    } else {
+        glVertex2f(x, y - 10); glVertex2f(x - 15, y + 25); glVertex2f(x + 15, y + 25);
+    }
+    glEnd();
+
+    glColor3f(0, 0, 0);
+    glBegin(GL_LINE_LOOP);
+    if (isFemale) {
+        glVertex2f(x, y + 25); glVertex2f(x - 15, y - 10); glVertex2f(x + 15, y - 10);
+    } else {
+        glVertex2f(x, y - 10); glVertex2f(x - 15, y + 25); glVertex2f(x + 15, y + 25);
+    }
+    glEnd();
+
+    glColor3f(0, 0, 0);
+    drawLineDDA(x - 5, y - 10, x - 10, y - 25);
+    drawLineDDA(x + 5, y - 10, x + 10, y - 25);
+
+
+    if (isFemale) {
+        drawLineDDA(x - 5, y + 15, x - 18, y + 5);
+        drawLineDDA(x + 5, y + 15, x + 18, y + 5);
+    } else {
+        drawLineDDA(x - 15, y + 25, x - 22, y + 5);
+        drawLineDDA(x + 15, y + 25, x + 22, y + 5);
+    }
+}
+
+void drawSeatedPerson(float x, float y, float r, float g, float b) {
+    drawFilledCircle(x, y + 15, 8, 0, 0, 0);
+
+    glColor3f(r, g, b);
+    glBegin(GL_TRIANGLES);
+    glVertex2f(x, y + 10);
+    glVertex2f(x - 12, y);
+    glVertex2f(x + 12, y);
+    glEnd();
+
+    glColor3f(0, 0, 0);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f(x, y + 10); glVertex2f(x - 12, y); glVertex2f(x + 12, y);
+    glEnd();
+
+    drawLineDDA(x - 6, y + 5, x - 15, y - 2);
+    drawLineDDA(x + 6, y + 5, x + 15, y - 2);
+}
+
+void drawFence(float startX, float endX, float baseY, float height) {
+    glColor3f(0.9f, 0.9f, 0.9f);
+    drawLineDDA(startX, baseY + height * 0.3f, endX, baseY + height * 0.3f);
+    drawLineDDA(startX, baseY + height * 0.7f, endX, baseY + height * 0.7f);
+    for(float x = startX; x <= endX; x += 20) {
+        drawLineDDA(x, baseY, x, baseY + height);
+    }
+}
+
+void drawSkyAndSun() {
+    if (isDay) drawRect(0, 500, 1000, 500, 0.1f, 0.6f, 0.9f);
+    else drawRect(0, 500, 1000, 500, 0.05f, 0.05f, 0.2f);
+
+
+    if (isDay) {
+        drawFilledCircle(150, 930, 40, 1.0f, 1.0f, 0.0f);
+        glColor3f(1.0f, 0.5f, 0.0f);
+        drawCircleMidpoint(150, 930, 42);
+    } else {
+        drawFilledCircle(150, 930, 35, 0.9f, 0.9f, 0.9f);
+        glColor3f(1.0f, 1.0f, 1.0f);
+        drawCircleMidpoint(150, 930, 37);
+    }
+}
+
+void drawClouds() {
+    glPushMatrix();
+    glTranslatef(cloudOffset, 0, 0);
+    float cloudColor = isDay ? 1.0f : 0.4f;
+    float cloudSets[3][2] = {{150, 900}, {450, 920}, {750, 880}};
+
+    for (int i = 0; i < 3; i++) {
+        drawFilledCircle(cloudSets[i][0], cloudSets[i][1], 35, cloudColor, cloudColor, cloudColor);
+        drawFilledCircle(cloudSets[i][0] - 30, cloudSets[i][1] - 10, 25, cloudColor, cloudColor, cloudColor);
+        drawFilledCircle(cloudSets[i][0] + 30, cloudSets[i][1] - 10, 25, cloudColor, cloudColor, cloudColor);
+    }
+    glPopMatrix();
+}
+
+void drawMountains() {
+    float peakColor = isDay ? 0.2f : 0.1f;
+
+    float mountains[8][3] = {
+        {-50, 250, 850},
+        {100, 300, 960},
+        {300, 200, 800},
+        {400, 350, 920},
+        {650, 220, 870},
+        {750, 300, 980},
+        {900, 150, 780},
+        {980, 200, 890}
+    };
+
+    for (int i = 0; i < 8; i++) {
+        float startX = mountains[i][0];
+        float width = mountains[i][1];
+        float peakY = mountains[i][2];
+        float peakX = startX + (width / 2.0f);
+
+        glColor3f(0.1f, peakColor + 0.4f, 0.2f);
+        glBegin(GL_TRIANGLES);
+        glVertex2f(startX, 550);
+        glVertex2f(peakX, peakY);
+        glVertex2f(startX + width, 550);
+        glEnd();
+
+        glColor3f(0, 0, 0);
+        drawLineDDA(startX, 550, peakX, peakY);
+        drawLineDDA(peakX, peakY, startX + width, 550);
+    }
+}
+
+void drawWindmills() {
+    for (int i = 100; i < 1000; i += 220) {
+        drawRect(i - 15, 550, 30, 270, 0.8f, 0.7f, 0.6f);
+        glPushMatrix();
+        glTranslatef(i, 820, 0);
+        glRotatef(windmillAngle, 0, 0, 1);
+        for (int j = 0; j < 4; j++) {
+            float angle = j * (3.14159f / 2.0f);
+            glColor3f(0.9f, 0.9f, 0.9f);
+            glBegin(GL_TRIANGLES);
+            glVertex2f(0, 0);
+            glVertex2f(110 * cos(angle - 0.25f), 110 * sin(angle - 0.25f));
+            glVertex2f(110 * cos(angle + 0.25f), 110 * sin(angle + 0.25f));
+            glEnd();
+            glColor3f(0.2f, 0.2f, 0.2f);
+            drawLineDDA(0, 0, 110 * cos(angle - 0.25f), 110 * sin(angle - 0.25f));
+            drawLineDDA(110 * cos(angle - 0.25f), 110 * sin(angle - 0.25f), 110 * cos(angle + 0.25f), 110 * sin(angle + 0.25f));
+            drawLineDDA(110 * cos(angle + 0.25f), 110 * sin(angle + 0.25f), 0, 0);
+        }
+        glPopMatrix();
+    }
+}
+
+void drawBuildings() {
+    float bX = 30;
+    string labels[] = {"College", "", "School", "", "Mall", ""};
+
+    float bR[] = {0.8f, 0.9f, 0.1f, 0.9f, 0.6f, 0.9f};
+    float bG[] = {0.1f, 0.5f, 0.7f, 0.7f, 0.2f, 0.4f};
+    float bB[] = {0.2f, 0.9f, 0.3f, 0.1f, 0.8f, 0.1f};
+
+    for (int i = 0; i < 6; i++) {
+        float height = (i % 2 == 0) ? 250 : 200;
+        drawRect(bX, 550, 120, height, bR[i], bG[i], bB[i]);
+        glColor3f(0.0f, 0.0f, 0.0f);
+        glBegin(GL_LINE_LOOP);
+        glVertex2f(bX, 550); glVertex2f(bX + 120, 550);
+        glVertex2f(bX + 120, 550 + height); glVertex2f(bX, 550 + height);
+        glEnd();
+
+        if(labels[i] != "") {
+            drawRect(bX - 5, 550 + height, 130, 20, 0.9f, 0.9f, 0.7f);
+            drawText(labels[i], bX + 40, 550 + height + 5);
+        }
+
+        float winR = isDay ? 0.3f : 1.0f;
+        float winG = isDay ? 0.5f : 1.0f;
+        float winB = isDay ? 0.8f : 0.0f;
+
+        for (float wy = 570; wy < 550 + height - 30; wy += 45) {
+            drawRect(bX + 20, wy, 30, 30, winR, winG, winB);
+            drawRect(bX + 70, wy, 30, 30, winR, winG, winB);
+        }
+        bX += 150;
+    }
+
+    // Green field directly in front of the buildings
+    float fieldG = isDay ? 0.7f : 0.4f;
+    drawRect(0, 550, 1000, 25, 0.2f, fieldG, 0.2f);
+
+    float lampLightR = isDay ? 0.3f : 1.0f;
+    float lampLightG = isDay ? 0.5f : 1.0f;
+
+    for (float lampX = 10; lampX <= 980; lampX += 150) {
+        drawRect(lampX, 550, 5, 80, 0.2f, 0.2f, 0.2f);
+        drawLineDDA(lampX + 2.5f, 630, lampX - 20, 630);
+        drawFilledCircle(lampX - 20, 625, 8, lampLightR, lampLightG, 0.0f);
+        if(!isDay) {
+            glColor3f(1, 1, 0);
+            drawCircleMidpoint(lampX - 20, 625, 12);
+        }
+    }
+
+    if (isDay) {
+        drawPerson(35, 570, 0.8f, 0.2f, 0.5f, true);
+        drawPerson(50, 570, 0.2f, 0.6f, 0.9f, true);
+        drawPerson(65, 570, 0.0f, 0.4f, 0.7f, false);
+        drawPerson(95, 570, 0.1f, 0.7f, 0.9f, false);
+        drawPerson(110, 570, 0.9f, 0.3f, 0.6f, true);
+        drawPerson(125, 570, 0.3f, 0.8f, 1.0f, true);
+        drawPerson(145, 570, 0.0f, 0.5f, 0.8f, false);
+
+        drawPerson(340, 570, 0.9f, 0.5f, 0.0f, true);
+        drawPerson(355, 570, 0.8f, 0.2f, 0.1f, true);
+        drawPerson(370, 570, 0.0f, 0.4f, 0.8f, false);
+        drawPerson(410, 570, 0.8f, 0.4f, 0.2f, true);
+        drawPerson(425, 570, 1.0f, 0.6f, 0.0f, false);
+
+        drawPerson(650, 570, 0.8f, 0.0f, 0.8f, true);
+        drawPerson(665, 570, 0.2f, 0.2f, 0.9f, false);
+        drawPerson(680, 570, 0.9f, 0.3f, 0.6f, true);
+    }
+}
+
+void drawTrafficLight() {
+
+    drawRect(390, 550, 8, 90, 0.2f, 0.2f, 0.2f);
+
+    drawRect(379, 630, 30, 80, 0.1f, 0.1f, 0.1f);
+
+    float r = (trafficState == 2) ? 1.0f : 0.2f;
+    float y = (trafficState == 1) ? 1.0f : 0.2f;
+    float g = (trafficState == 0) ? 1.0f : 0.2f;
+
+    drawFilledCircle(394, 690, 10, r, 0, 0);
+    drawFilledCircle(394, 670, 10, y, y, 0);
+    drawFilledCircle(394, 650, 10, 0, g, 0);
+
+    if (!isDay) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        if (trafficState == 2) { glColor4f(1, 0, 0, 0.4f); drawCircleMidpoint(394, 690, 15); }
+        if (trafficState == 1) { glColor4f(1, 1, 0, 0.4f); drawCircleMidpoint(394, 670, 15); }
+        if (trafficState == 0) { glColor4f(0, 1, 0, 0.4f); drawCircleMidpoint(394, 650, 15); }
+        glDisable(GL_BLEND);
+    }
+}
+
+void drawRoadAndVehicles() {
+    drawRect(0, 420, 1000, 130, 0.4f, 0.4f, 0.4f);
+    for (int i = 20; i < 1000; i += 80) drawRect(i, 480, 40, 5, 1, 1, 1);
+
+    for (int y = 425; y < 545; y += 15) {
+        drawRect(375, y, 50, 6, 0.9f, 0.9f, 0.9f);
+    }
+
+    drawTrafficLight();
+
+    glPushMatrix();
+    glTranslatef(busOffset, 0, 0);
+    drawRect(50, 490, 240, 70, 1.0f, 0.0f, 1.0f);
+    for(int i=60; i<280; i+=35) drawRect(i, 520, 25, 30, 0.2f, 0.2f, 0.8f);
+
+    drawRect(290, 500, 5, 15, 1.0f, 1.0f, 0.8f);
+    if (!isDay) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glColor4f(1.0f, 1.0f, 0.6f, 0.4f);
+        glBegin(GL_TRIANGLES);
+        glVertex2f(295, 507); glVertex2f(500, 560); glVertex2f(500, 450);
+        glEnd();
+        glDisable(GL_BLEND);
+    }
+    drawWheel(90, 490, 18, wheelAngleBus);
+    drawWheel(240, 490, 18, wheelAngleBus);
+    glPopMatrix();
+
+    glPushMatrix();
+    glTranslatef(carOffset, 0, 0);
+    drawRect(450, 430, 80, 25, 1.0f, 0.0f, 0.0f);
+    drawRect(465, 455, 50, 20, 1.0f, 0.0f, 0.0f);
+    drawRect(470, 455, 20, 15, 0.7f, 0.9f, 1.0f);
+    drawRect(495, 455, 15, 15, 0.7f, 0.9f, 1.0f);
+
+    drawRect(445, 435, 5, 10, 1.0f, 1.0f, 0.8f);
+    if (!isDay) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glColor4f(1.0f, 1.0f, 0.6f, 0.4f);
+        glBegin(GL_TRIANGLES);
+        glVertex2f(445, 440); glVertex2f(250, 490); glVertex2f(250, 390);
+        glEnd();
+        glDisable(GL_BLEND);
+    }
+    drawWheel(470, 430, 12, wheelAngleCar);
+    drawWheel(510, 430, 12, wheelAngleCar);
+    glPopMatrix();
+}
+
+void drawRiverAndPark() {
+    drawRect(0, 330, 1000, 90, 0.7f, 0.2f, 0.2f);
+    glColor3f(0.0f, 0.0f, 0.0f);
+    for(int y = 330; y <= 420; y += 15) drawLineDDA(0, y, 1000, y);
+    int row = 0;
+    for(int y = 330; y < 420; y += 15) {
+        int startX = (row % 2 == 0) ? 0 : 20;
+        for(int x = startX; x <= 1000; x += 40) drawLineDDA(x, y, x, y + 15);
+        row++;
+    }
+
+    drawFence(0, 1000, 420, 25);
+    float waterB = isDay ? 0.8f : 0.4f;
+    drawRect(0, 180, 1000, 150, 0.2f, 0.2f, waterB);
+    drawFence(0, 1000, 180, 25);
+
+    glPushMatrix();
+    glTranslatef(boatOffset, 0, 0);
+    drawRect(460, 230, 80, 20, 0.1f, 0.1f, 0.1f);
+    glBegin(GL_TRIANGLES);
+    glVertex2f(460, 230); glVertex2f(460, 250); glVertex2f(440, 250);
+    glVertex2f(540, 230); glVertex2f(540, 250); glVertex2f(560, 250);
+    glEnd();
+    drawRect(480, 250, 50, 20, 1.0f, 1.0f, 0.0f);
+    drawFilledCircle(470, 260, 5, 0, 0, 0);
+    drawLineDDA(470, 256, 450, 220);
+    glPopMatrix();
+
+    drawRect(0, 0, 1000, 180, 0.6f, 0.7f, 0.4f);
+    glColor3f(0.3f, 0.4f, 0.2f);
+    for(int i = -200; i < 1200; i += 30) {
+        drawLineDDA(i, 0, i + 180, 180);
+        drawLineDDA(i, 180, i + 180, 0);
+    }
+
+    float benchX[] = {150, 400, 650};
+    for(int i=0; i<3; i++) {
+        drawRect(benchX[i], 100, 100, 20, 0.6f, 0.4f, 0.2f);
+        if (isDay) {
+            drawSeatedPerson(benchX[i] + 30, 120, 0.1f, 0.4f, 0.7f);
+            drawSeatedPerson(benchX[i] + 70, 120, 0.8f, 0.2f, 0.5f);
+        }
+        drawRect(benchX[i]+10, 80, 10, 20, 0.6f, 0.4f, 0.2f);
+        drawRect(benchX[i]+80, 80, 10, 20, 0.6f, 0.4f, 0.2f);
+    }
+
+    if (isDay) {
+        drawPerson(550, 120, 0.7f, 0.7f, 0.7f, true);
+        drawPerson(600, 50, 0.6f, 0.0f, 0.6f, false);
+    }
+
+    glColor3f(0.5f, 0.1f, 0.1f);
+    glBegin(GL_POLYGON);
+    glVertex2f(830, 50); glVertex2f(880, 50);
+    glVertex2f(860, 300); glVertex2f(840, 300);
+    glEnd();
+    float treeG = isDay ? 0.8f : 0.4f;
+    float leafCenters[6][2] = {{850, 450}, {750, 350}, {950, 350}, {800, 280}, {900, 280}, {850, 500}};
+    for(int i=0; i<6; i++) drawFilledCircle(leafCenters[i][0], leafCenters[i][1], 90, 0.0f, treeG, 0.0f);
+}
+
+
+void display() {
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    drawSkyAndSun();
+    drawClouds();
+    drawMountains();
+    drawWindmills();
+    drawBuildings();
+    drawRoadAndVehicles();
+    drawRiverAndPark();
+
+    glFlush();
+}
+
+void timer(int) {
+    cloudOffset += 0.5f;
+    if (cloudOffset > 1000) cloudOffset = -1000;
+    windmillAngle -= 2.0f;
+    boatOffset -= 1.0f;
+    if (boatOffset < -600) boatOffset = 600;
+
+
+    lightTimer++;
+    if (trafficState == 0 && lightTimer > 300) { trafficState = 1; lightTimer = 0; }
+    else if (trafficState == 1 && lightTimer > 100) { trafficState = 2; lightTimer = 0; }
+    else if (trafficState == 2 && lightTimer > 300) { trafficState = 0; lightTimer = 0; }
+
+    float carFront = 450 + carOffset;
+    if ((trafficState == 2 || trafficState == 1) && carFront > 410 && carFront < 435) {
+        carSpeed = 0.0f;
+    } else {
+        carSpeed = 3.0f;
+    }
+    carOffset -= carSpeed;
+    if (carSpeed > 0) wheelAngleCar += 7.5f;
+    if (carOffset < -600) carOffset = 600;
+
+    float busFront = 290 + busOffset;
+    if ((trafficState == 2 || trafficState == 1) && busFront < 390 && busFront > 365) {
+        busSpeed = 0.0f;
+    } else {
+        busSpeed = 2.0f;
+    }
+    busOffset += busSpeed;
+    if (busSpeed > 0) wheelAngleBus -= 5.0f;
+    if (busOffset > 1000) busOffset = -400;
+
+    glutPostRedisplay();
+    glutTimerFunc(1000 / 60, timer, 0);
+}
+
+void keyboard(unsigned char key, int x, int y) {
+    if (key == 'd' || key == 'D') isDay = true;
+    if (key == 'n' || key == 'N') isDay = false;
+    glutPostRedisplay();
+}
+
+int main(int argc, char** argv) {
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
+    glutInitWindowSize(800, 800);
+    glutCreateWindow("Project: Animated Cityscape with Traffic Logic");
+
+    gluOrtho2D(0.0, 1000.0, 0.0, 1000.0);
+
+    glutDisplayFunc(display);
+    glutKeyboardFunc(keyboard);
+    glutTimerFunc(0, timer, 0);
+
+    cout << "--- Project Controls ---" << endl;
+    cout << "Press 'D' for Day Mode" << endl;
+    cout << "Press 'N' for Night Mode" << endl;
+
+    glutMainLoop();
+    return 0;
+}
